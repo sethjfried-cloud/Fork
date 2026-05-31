@@ -218,15 +218,10 @@ export default function Home() {
   const [playerName, setPlayerName] = useState("")
   const [linkCopied, setLinkCopied] = useState(false)
   
-  // Check-in state
-  const [checkInRestaurant, setCheckInRestaurant] = useState<Restaurant | null>(null)
-  const [showCheckIn, setShowCheckIn] = useState(false)
-  
   // Order modal state
   const [showReservations, setShowReservations] = useState(false)
   
-  // Lottery / Prize state
-  const [showLotteryConfirm, setShowLotteryConfirm] = useState(false)
+  // Lottery / Prize state (passive — no confirmation modal)
   const [lotteryEntryCount, setLotteryEntryCount] = useState(0)
   
   // Roulette state
@@ -368,33 +363,15 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [activeDrop])
 
-  // Check for post-meal check-in and group join code on mount
+  // Check for group join code in URL on mount
   useEffect(() => {
-    // Check for join code in URL
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search)
       const joinParam = params.get("join")
       if (joinParam) {
         setJoinCode(joinParam.toUpperCase())
         setScreen("group-join")
-        // Clear the URL param
         window.history.replaceState({}, "", window.location.pathname)
-      }
-    }
-
-    // Check for post-meal check-in
-    const stored = localStorage.getItem("fork_last_order")
-    if (stored) {
-      try {
-        const { restaurant, timestamp } = JSON.parse(stored)
-        const elapsed = Date.now() - timestamp
-        const ninetyMinutes = 90 * 60 * 1000
-        if (elapsed >= ninetyMinutes) {
-          setCheckInRestaurant(restaurant)
-          setShowCheckIn(true)
-        }
-      } catch (e) {
-        localStorage.removeItem("fork_last_order")
       }
     }
   }, [])
@@ -424,7 +401,6 @@ export default function Home() {
         .eq("year", now.getFullYear())
       
       setLotteryEntryCount(count || 1)
-      setShowLotteryConfirm(true)
     } catch (e) {
       // Silently fail - don't interrupt the order flow
     }
@@ -553,22 +529,6 @@ export default function Home() {
     } catch {
       // Claim failed
     }
-  }
-
-  // Store order for check-in
-  function storeOrderForCheckIn(restaurant: Restaurant) {
-    localStorage.setItem("fork_last_order", JSON.stringify({
-      restaurant,
-      timestamp: Date.now()
-    }))
-  }
-
-  // Handle check-in response
-  function handleCheckIn(rating: "good" | "bad") {
-    // Could send to analytics/backend here
-    localStorage.removeItem("fork_last_order")
-    setShowCheckIn(false)
-    setCheckInRestaurant(null)
   }
 
   // Generate shareable group link
@@ -815,21 +775,26 @@ const loc = getEffectiveLocation()
 
   // Roll again - re-fetch and show new random pick
   async function rollAgain() {
-const loc = getEffectiveLocation()
-  setSlotSpinning(true)
-  
-  try {
-    const locationCoords = coords || await geocodeLocation(loc)
-    
-    const res = await fetch("/api/restaurants", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        location: loc,
-        neighborhood: loc.split(',')[0].trim().toLowerCase(),
+    const loc = getEffectiveLocation()
+    setSlotSpinning(true)
+
+    // Rebuild categories from last quiz answers so the re-roll stays on-vibe
+    const energyOption = VIBE_CARDS[0].options.find(o => o.value === answers.energy)
+    const partyOption = VIBE_CARDS[1].options.find(o => o.value === answers.party)
+    const categories = energyOption?.categories || partyOption?.categories || "restaurants"
+
+    try {
+      const locationCoords = coords || await geocodeLocation(loc)
+
+      const res = await fetch("/api/restaurants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          location: loc,
+          neighborhood: loc.split(',')[0].trim().toLowerCase(),
           latitude: locationCoords?.lat,
           longitude: locationCoords?.lng,
-          categories: "restaurants",
+          categories,
           price: "1,2,3",
           sort_by: "rating",
           limit: 20,
@@ -837,13 +802,13 @@ const loc = getEffectiveLocation()
       })
       const data = await res.json()
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : "Something went wrong")
-      
+
       // Shuffle results for randomness
       const shuffled = shuffleArray(data.restaurants) as typeof data.restaurants
       setResults(shuffled)
       setCurrentResultIdx(0)
       setApproximate(data.approximate || false)
-      
+
       setTimeout(() => {
         setSlotSpinning(false)
         setScreen("single-result")
@@ -881,7 +846,6 @@ const loc = getEffectiveLocation()
       setSwipeDir("right")
       setTimeout(() => {
         setSwipeDir(null)
-        storeOrderForCheckIn(restaurant)
         setOrderModal(restaurant)
       }, 300)
     }
@@ -1064,33 +1028,38 @@ const loc = getEffectiveLocation()
 
   async function startGroupVoting() {
     if (!groupSession || !participant?.is_host) return
-    
+
     setScreen("loading")
     setSlotSpinning(true)
-    
+
     try {
+      // Use host's GPS coords if available, otherwise geocode the session location
+      const locationCoords = coords || await geocodeLocation(groupSession.location)
+
       const res = await fetch("/api/restaurants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           location: groupSession.location,
           neighborhood: groupSession.location.split(',')[0].trim().toLowerCase(),
+          latitude: locationCoords?.lat,
+          longitude: locationCoords?.lng,
           categories: "restaurants",
           price: "1,2,3",
           sort_by: "rating",
-          limit: 10,
+          limit: 20,
         }),
       })
-      
+
       const data = await res.json()
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : "Something went wrong")
-      
+
       const supabase = await getSupabase()
       await supabase
         .from("group_sessions")
         .update({ status: "voting", restaurants: data.restaurants })
         .eq("id", groupSession.id)
-      
+
       setResults(data.restaurants)
       setTimeout(() => {
         setSlotSpinning(false)
@@ -1163,43 +1132,6 @@ const loc = getEffectiveLocation()
 
       <div className="fork-sans" style={{ display: "flex", justifyContent: "center", minHeight: "100dvh", background: "#0D0D0D" }}>
         <div style={{ width: "100%", maxWidth: 390 }}>
-
-          {/* ── CHECK-IN MODAL ── */}
-          {showCheckIn && checkInRestaurant && (
-            <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
-              <div className="bounce-in" style={{ background: "#141414", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, textAlign: "center" }}>
-                <div style={{ fontSize: 40, marginBottom: 16 }}>🍽</div>
-                <h2 className="fork-serif" style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 8 }}>
-                  How was it?
-                </h2>
-                <p style={{ fontSize: 14, color: "#888", marginBottom: 8 }}>
-                  You ordered from
-                </p>
-                <p style={{ fontSize: 16, fontWeight: 600, color: "#fff", marginBottom: 24 }}>
-                  {checkInRestaurant.name}
-                </p>
-                <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-                  <button 
-                    onClick={() => handleCheckIn("good")}
-                    style={{ width: 72, height: 72, borderRadius: 20, background: "#1D9E75", border: "none", cursor: "pointer", fontSize: 32, transition: "transform .15s" }}
-                    className="action-btn">
-                    👍
-                  </button>
-                  <button 
-                    onClick={() => handleCheckIn("bad")}
-                    style={{ width: 72, height: 72, borderRadius: 20, background: "#D85A30", border: "none", cursor: "pointer", fontSize: 32, transition: "transform .15s" }}
-                    className="action-btn">
-                    👎
-                  </button>
-                </div>
-                <button 
-                  onClick={() => { setShowCheckIn(false); localStorage.removeItem("fork_last_order") }}
-                  style={{ background: "transparent", border: "none", color: "#888", fontSize: 13, marginTop: 20, cursor: "pointer", fontFamily: "inherit" }}>
-                  Skip
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* ── LOCATION ── */}
           {screen === "location" && (
@@ -1362,28 +1294,6 @@ const loc = getEffectiveLocation()
                   </div>
                 </button>
               )}
-
-              {/* Fork Roulette Banner */}
-              <button 
-                onClick={() => setScreen("roulette")}
-                style={{ 
-                  width: "100%",
-                  background: "linear-gradient(135deg, #7F77DD 0%, #FF5C35 100%)",
-                  border: "none", 
-                  borderRadius: 14, 
-                  padding: "14px 18px", 
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 32
-                }}>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#fff", marginBottom: 2 }}>Fork Roulette</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.7)" }}>Spin to win dinner for two</div>
-                </div>
-                <div style={{ fontSize: 24 }}>🎰</div>
-              </button>
             </div>
           )}
 
@@ -2087,24 +1997,42 @@ const loc = getEffectiveLocation()
               </div>
 
               {/* Restaurant Card */}
-              <div style={{ background: "#fff", borderRadius: 24, padding: "28px 24px", marginBottom: 24 }}>
-                <div style={{ 
-                  width: 64, height: 64, borderRadius: 16, 
-                  background: ["#FF5C35","#1D9E75","#7F77DD","#D85A30","#F4A261"][currentResultIdx % 5],
-                  display: "flex", alignItems: "center", justifyContent: "center", 
-                  fontSize: 26, fontWeight: 700, color: "#fff",
-                  margin: "0 auto 16px"
-                }}>
-                  {currentRestaurant.name[0]}
-                </div>
-                <h2 className="fork-serif" style={{ fontSize: 20, fontWeight: 700, color: "#141414", textAlign: "center", marginBottom: 6 }}>
-                  {currentRestaurant.name}
-                </h2>
-                <p style={{ fontSize: 13, color: "#888", textAlign: "center", marginBottom: 12 }}>
-                  {currentRestaurant.categories} · {currentRestaurant.price}
-                </p>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: "#F4A261" }}>★ {currentRestaurant.rating}</span>
+              <div style={{ background: "#141414", borderRadius: 24, overflow: "hidden", marginBottom: 24 }}>
+                {currentRestaurant.image ? (
+                  <div style={{
+                    width: "100%",
+                    height: 180,
+                    background: `url(${currentRestaurant.image}) center/cover`,
+                    position: "relative"
+                  }}>
+                    <div style={{
+                      position: "absolute", bottom: 0, left: 0, right: 0,
+                      height: 80, background: "linear-gradient(transparent, #141414)"
+                    }} />
+                  </div>
+                ) : (
+                  <div style={{
+                    width: "100%", height: 120,
+                    background: ["#FF5C35","#1D9E75","#7F77DD","#D85A30","#F4A261"][currentResultIdx % 5],
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 48, fontWeight: 700, color: "#fff"
+                  }}>
+                    {currentRestaurant.name[0]}
+                  </div>
+                )}
+                <div style={{ padding: "20px 24px 24px" }}>
+                  <h2 className="fork-serif" style={{ fontSize: 20, fontWeight: 400, color: "#fff", textAlign: "center", marginBottom: 6 }}>
+                    {currentRestaurant.name}
+                  </h2>
+                  <p style={{ fontSize: 13, color: "#888", textAlign: "center", marginBottom: 12 }}>
+                    {currentRestaurant.categories} · {currentRestaurant.price}
+                  </p>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: "#F4A261" }}>★ {currentRestaurant.rating}</span>
+                    {currentRestaurant.distance != null && (
+                      <span style={{ fontSize: 12, color: "#666" }}>· {currentRestaurant.distance} mi</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -2187,7 +2115,6 @@ const loc = getEffectiveLocation()
 
                 <button 
                   onClick={() => {
-                    storeOrderForCheckIn(groupSession.final_pick!)
                     setOrderModal(groupSession.final_pick)
                   }}
                   style={{ width: "100%", background: "#1D9E75", border: "none", borderRadius: 14, padding: "16px", cursor: "pointer", fontSize: 15, fontWeight: 600, color: "#fff", marginBottom: 12 }}>
@@ -2202,52 +2129,25 @@ const loc = getEffectiveLocation()
             </div>
           )}
 
-          {/* ── RESULTS LIST (fallback) ── */}
+          {/* ── ERROR STATE (was results list — philosophy violation removed) ── */}
           {screen === "results" && (
-            <div style={{ ...dark, paddingBottom: 32 }} className="fade-in">
+            <div style={{ ...dark, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }} className="fade-in">
               <Wordmark back onBack={() => setScreen("location")} />
-              <h2 className="fork-serif" style={{ fontSize: 22, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
-                {error ? "Nothing found" : "Here's what we found"}
+              <div style={{ fontSize: 56, marginBottom: 20 }}>🍽️</div>
+              <h2 className="fork-serif" style={{ fontSize: 24, fontWeight: 400, color: "#fff", marginBottom: 12 }}>
+                Nothing matched
               </h2>
-              <p style={{ fontSize: 13, color: "#444", marginBottom: 20 }}>{city}</p>
-
-              {error && (
-                <div style={{ background: "#1A1A1A", borderRadius: 12, padding: "16px", marginBottom: 16, color: "#888", fontSize: 14 }}>
-                  {error} — try a different city or loosen your filters.
-                </div>
-              )}
-
-              {results.map((r, i) => (
-                <div 
-                  key={i} 
-                  onClick={() => {
-                    storeOrderForCheckIn(r)
-                    setOrderModal(r)
-                  }}
-                  style={{ background: "#fff", borderRadius: 16, padding: "14px 16px", marginBottom: 10, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 12, background: ["#FF5C35","#1D9E75","#7F77DD","#D85A30","#F4A261"][i % 5], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                    {r.name[0]}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 600, color: "#141414", marginBottom: 2 }}>{r.name}</div>
-                    <div style={{ fontSize: 12, color: "#999", marginBottom: 5 }}>{r.categories} · {r.price}</div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: "#F4A261" }}>★ {r.rating}</span>
-                      <span style={{ fontSize: 11, color: "#0F6E56", background: "#E1F5EE", padding: "2px 7px", borderRadius: 5, fontWeight: 500 }}>Open · Delivers</span>
-                    </div>
-                  </div>
-                  <div style={{ background: "#FF5C35", color: "#fff", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}>
-                    Order
-                  </div>
-                </div>
-              ))}
-
-              <div style={{ textAlign: "center", marginTop: 16 }}>
-                <button onClick={() => setScreen("location")}
-                  style={{ background: "transparent", border: "none", color: "#444", fontSize: 13, cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" }}>
-                  start over
-                </button>
-              </div>
+              <p style={{ fontSize: 14, color: "#888", marginBottom: 8, maxWidth: 260, lineHeight: 1.5 }}>
+                {error || "We couldn't find open spots for that search."}
+              </p>
+              <p style={{ fontSize: 13, color: "#555", marginBottom: 32, maxWidth: 260, lineHeight: 1.5 }}>
+                Try a different neighborhood or go with "Pick for me" to cast a wider net.
+              </p>
+              <button
+                onClick={() => { setError(null); setScreen("location") }}
+                style={{ background: "#FF5C35", border: "none", borderRadius: 14, padding: "16px 32px", color: "#fff", fontSize: 16, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                Start over
+              </button>
             </div>
           )}
 
@@ -2392,59 +2292,6 @@ const loc = getEffectiveLocation()
         </div>
       )}
 
-      {/* ── LOTTERY ENTRY CONFIRMATION ── */}
-      {showLotteryConfirm && (
-        <div
-          className="modal-overlay"
-          onClick={() => setShowLotteryConfirm(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 110 }}>
-          <div
-            className="modal-content lottery-confetti"
-            onClick={e => e.stopPropagation()}
-            style={{ background: "#141414", borderRadius: 24, padding: "32px 28px", width: "90%", maxWidth: 340, textAlign: "center", position: "relative", overflow: "hidden" }}>
-            
-            {/* Confetti effect */}
-            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
-              {[...Array(20)].map((_, i) => (
-                <div
-                  key={i}
-                  className="confetti-piece"
-                  style={{
-                    position: "absolute",
-                    width: 8,
-                    height: 8,
-                    background: ["#FF5C35", "#F4A261", "#1D9E75", "#7F77DD", "#E9C46A"][i % 5],
-                    borderRadius: i % 2 === 0 ? "50%" : 0,
-                    left: `${Math.random() * 100}%`,
-                    top: -10,
-                    animation: `confetti-fall ${1.5 + Math.random()}s ease-out forwards`,
-                    animationDelay: `${Math.random() * 0.5}s`,
-                  }}
-                />
-              ))}
-            </div>
-            
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🎟️</div>
-            <h2 className="fork-serif" style={{ fontSize: 22, fontWeight: 400, color: "#fff", marginBottom: 8 }}>
-              {"You're entered!"}
-            </h2>
-            <p style={{ fontSize: 14, color: "#888", marginBottom: 20, lineHeight: 1.5 }}>
-              Entry #{lotteryEntryCount} this week. Every order is a chance to win a tasting menu for two, a private chef dinner, or a food tour.
-            </p>
-            
-            <div style={{ background: "#1A1A1A", borderRadius: 12, padding: "14px 16px", marginBottom: 20 }}>
-              <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>This Week{"'"}s Prize</div>
-              <div style={{ fontSize: 15, color: "#F4A261", fontWeight: 600 }}>Omakase for Two in NYC</div>
-            </div>
-            
-            <button 
-              onClick={() => setShowLotteryConfirm(false)}
-              style={{ width: "100%", background: "#FF5C35", border: "none", borderRadius: 14, padding: "16px", cursor: "pointer", fontSize: 15, fontWeight: 600, color: "#fff" }}>
-              Nice!
-            </button>
-          </div>
-        </div>
-      )}
     </>
   )
 }
