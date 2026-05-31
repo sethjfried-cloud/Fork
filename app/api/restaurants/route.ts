@@ -28,7 +28,25 @@ const NYC_NEIGHBORHOODS: Record<string, { terms: string[]; excludes: string[] }>
   'chelsea': { terms: ['chelsea'], excludes: ['hells kitchen', 'flatiron'] },
 }
 
+// Yelp category aliases that are NOT restaurants — blocklist applied post-fetch.
+// These slip through because Yelp's `restaurants` umbrella is loose.
+const BLOCKED_CATEGORY_ALIASES = new Set([
+  // Grocery / retail food
+  'grocery', 'supermarkets', 'convenience', 'gaspstations', 'servicestations',
+  'pharmacy', 'drugstores', 'vitaminsupplements', 'healthmarkets',
+  // Shopping / non-food
+  'shopping', 'deptstores', 'wholesale', 'costco',
+  // Services
+  'financialservices', 'banks', 'laundryservices', 'drycleaninglaundry',
+  'autorepair', 'bodyshops', 'CarWash',
+  // Hospitality but not dining
+  'hotels', 'hotelstravel',
+])
+
 const MAX_LIMIT = 20
+// Minimum reviews to appear — filters out closed/inactive listings and non-restaurants
+// that happen to be on Yelp (ShopRite, bodegas, etc.)
+const MIN_REVIEW_COUNT = 5
 
 export async function POST(req: NextRequest) {
   const { location, latitude, longitude, categories, price, sort_by, neighborhood, limit: requestedLimit } = await req.json()
@@ -51,13 +69,13 @@ export async function POST(req: NextRequest) {
   // Cap limit at MAX_LIMIT - handle both string and number input
   const parsedLimit = typeof requestedLimit === 'number' ? requestedLimit : parseInt(requestedLimit) || 5
   const limit = String(Math.min(Math.max(parsedLimit, 1), MAX_LIMIT))
-  
+
   // Build params - prefer lat/long for accuracy, fallback to text location
   // 1200 meters = ~0.75 miles - tighter neighborhood radius to avoid adjacent areas
   const params = new URLSearchParams({
     categories: categories || 'restaurants',
     price: price || '1,2',
-    sort_by: sort_by || 'distance', // Sort by distance first to prioritize closest
+    sort_by: sort_by || 'distance',
     open_now: 'true',
     limit: '50', // Fetch more to filter down
     radius: '1200',
@@ -105,7 +123,7 @@ export async function POST(req: NextRequest) {
   }
 
   const data = await res.json()
-  
+
   if (!data.businesses) {
     return NextResponse.json({ restaurants: [], approximate: false })
   }
@@ -116,38 +134,49 @@ export async function POST(req: NextRequest) {
   const filterTerms = neighborhoodConfig?.terms || [searchNeighborhood.split(',')[0].trim()]
   const excludeTerms = neighborhoodConfig?.excludes || []
 
-  // Map all results
-  const allRestaurants = (data.businesses ?? []).map((b: any) => ({
-    id: b.id,
-    name: b.name,
-    image: b.image_url ?? null,
-    rating: b.rating,
-    reviewCount: b.review_count,
-    price: b.price ?? '$',
-    categories: b.categories.map((c: any) => c.title).join(', '),
-    address: b.location.display_address.join(', '),
-    city: b.location.city?.toLowerCase() || '',
-    neighborhood: (b.location.neighborhood || b.location.address2 || '').toLowerCase(),
-    url: b.url,
-    // Distance in miles (Yelp returns meters)
-    distance: b.distance ? Math.round(b.distance * 0.000621371 * 10) / 10 : null,
-  }))
+  // Map and quality-filter in one pass
+  const allRestaurants = (data.businesses ?? [])
+    .filter((b: any) => {
+      // Must have minimum reviews — weeds out ghost listings and non-restaurants
+      if ((b.review_count ?? 0) < MIN_REVIEW_COUNT) return false
+
+      // Reject if ANY of the business's categories are on the blocklist
+      const categoryAliases: string[] = (b.categories ?? []).map((c: any) => c.alias as string)
+      if (categoryAliases.some(alias => BLOCKED_CATEGORY_ALIASES.has(alias))) return false
+
+      return true
+    })
+    .map((b: any) => ({
+      id: b.id,
+      name: b.name,
+      image: b.image_url ?? null,
+      rating: b.rating,
+      reviewCount: b.review_count,
+      price: b.price ?? '$',
+      categories: b.categories.map((c: any) => c.title).join(', '),
+      address: b.location.display_address.join(', '),
+      city: b.location.city?.toLowerCase() || '',
+      neighborhood: (b.location.neighborhood || b.location.address2 || '').toLowerCase(),
+      url: b.url,
+      // Distance in miles (Yelp returns meters)
+      distance: b.distance ? Math.round(b.distance * 0.000621371 * 10) / 10 : null,
+    }))
 
   // STRICT filtering: must match neighborhood AND must NOT be in excluded areas
   const filteredRestaurants = allRestaurants.filter((r: any) => {
     const addressLower = r.address.toLowerCase()
     const neighborhoodLower = r.neighborhood.toLowerCase()
     const fullLocation = `${addressLower} ${neighborhoodLower}`
-    
+
     // Check if in an excluded area first
-    const isExcluded = excludeTerms.some(term => fullLocation.includes(term))
+    const isExcluded = excludeTerms.some((term: string) => fullLocation.includes(term))
     if (isExcluded) return false
-    
+
     // Must match at least one filter term in address or Yelp's neighborhood field
-    const matchesTerm = filterTerms.some(term => 
+    const matchesTerm = filterTerms.some((term: string) =>
       addressLower.includes(term) || neighborhoodLower.includes(term)
     )
-    
+
     return matchesTerm
   })
 
@@ -163,7 +192,7 @@ export async function POST(req: NextRequest) {
 
   // If filtering leaves us with too few results, fall back to distance-sorted unfiltered
   const useFiltered = sortedFiltered.length >= 3
-  const restaurants = useFiltered 
+  const restaurants = useFiltered
     ? sortedFiltered.slice(0, parseInt(limit))
     : allRestaurants.slice(0, parseInt(limit))
 
