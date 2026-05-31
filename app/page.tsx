@@ -53,9 +53,24 @@ const DELIVERY_APPS = [
   ]
 
 const RESERVATION_APPS = [
-  { name: "OpenTable", color: "#DA3743", getUrl: (name: string, address: string) => `https://www.opentable.com/s?term=${encodeURIComponent(name + " " + address)}&queryUnderstandingType=location` },
-  { name: "Resy", color: "#C41E3D", getUrl: (name: string, address: string) => `https://resy.com/cities?query=${encodeURIComponent(name + " " + address.split(",")[0])}` },
-  { name: "Yelp", color: "#D32323", getUrl: (name: string, address: string, url: string) => url },
+  { 
+    name: "OpenTable", 
+    color: "#DA3743", 
+    hint: "Search if they're listed",
+    getUrl: (name: string, address: string) => `https://www.opentable.com/s?term=${encodeURIComponent(name + " " + address)}&queryUnderstandingType=location` 
+  },
+  { 
+    name: "Resy", 
+    color: "#C41E3D", 
+    hint: "Search if they're listed",
+    getUrl: (name: string, address: string) => `https://resy.com/cities?query=${encodeURIComponent(name + " " + address.split(",")[0])}` 
+  },
+  { 
+    name: "Yelp", 
+    color: "#D32323", 
+    hint: "View restaurant page & contact",
+    getUrl: (name: string, address: string, url: string) => url 
+  },
 ]
 
 const SLOT_ITEMS = ["🍕", "🍔", "🌮", "🍜", "🍣", "🥗", "🍛", "🍝"]
@@ -2250,7 +2265,7 @@ const loc = getEffectiveLocation()
               </>
             ) : (
               <>
-                <div style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>Book a table:</div>
+                <div style={{ fontSize: 13, color: "#888", marginBottom: 12 }}>Not all restaurants take online bookings — check below or call ahead:</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {RESERVATION_APPS.map(app => (
                     <a 
@@ -2271,7 +2286,7 @@ const loc = getEffectiveLocation()
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 15, fontWeight: 600, color: "#fff" }}>{app.name}</div>
                         <div style={{ fontSize: 12, color: "rgba(255,255,255,.7)" }}>
-                          {app.name === "Yelp" ? "View restaurant page" : `Find ${orderModal.name}`}
+                          {(app as any).hint}
                         </div>
                       </div>
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
