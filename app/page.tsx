@@ -332,6 +332,16 @@ export default function Home() {
             <ErrorScreen error={error} setScreen={setScreen} setError={setError} dark={dark} />
           )}
 
+          {screen === "group-join" && (
+            <GroupSetupScreen
+              playerName={group.playerName} setPlayerName={group.setPlayerName}
+              cityIn={cityIn} setCityIn={setCityIn}
+              joinCode={group.joinCode} setJoinCode={group.setJoinCode}
+              error={error} createGroupSession={group.createGroupSession}
+              joinGroupSession={group.joinGroupSession} setScreen={setScreen} dark={dark}
+            />
+          )}
+
           {screen === "group-setup" && (
             <GroupSetupScreen
               playerName={group.playerName} setPlayerName={group.setPlayerName}
