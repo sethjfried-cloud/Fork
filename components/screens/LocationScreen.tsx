@@ -11,18 +11,40 @@ type Props = {
   setScreen: (s: Screen) => void
   activeDrop: { restaurant_name: string } | null
   dropTimeLeft: string
+  favoritesCount: number
   dark: React.CSSProperties
 }
 
-export function LocationScreen({ cityIn, setCityIn, setCoords, justGo, startQuiz, setScreen, activeDrop, dropTimeLeft, dark }: Props) {
+export function LocationScreen({ cityIn, setCityIn, setCoords, justGo, startQuiz, setScreen, activeDrop, dropTimeLeft, favoritesCount, dark }: Props) {
   return (
     <div style={{ ...dark, display: "flex", flexDirection: "column" }}>
-      {/* Minimal Wordmark */}
-      <div style={{ textAlign: "center", paddingTop: 32, marginBottom: 48 }}>
-        <div style={{ fontSize: 24, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+      {/* Wordmark + Favorites */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 32, marginBottom: 48 }}>
+        <div style={{ width: 36 }} />
+        <div style={{ fontSize: 24, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 3 }}>
           Fork
           <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#FF5C35" }} />
         </div>
+        <button
+          onClick={() => setScreen("favorites")}
+          style={{ background: "none", border: "none", cursor: "pointer", padding: 4, position: "relative" }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+              fill={favoritesCount > 0 ? "#FF5C35" : "none"}
+              stroke={favoritesCount > 0 ? "#FF5C35" : "#555"}
+              strokeWidth="1.5" />
+          </svg>
+          {favoritesCount > 0 && (
+            <span style={{
+              position: "absolute", top: -2, right: -4,
+              background: "#FF5C35", color: "#fff",
+              fontSize: 9, fontWeight: 700, borderRadius: 10,
+              padding: "1px 5px", minWidth: 16, textAlign: "center",
+            }}>
+              {favoritesCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Hero */}

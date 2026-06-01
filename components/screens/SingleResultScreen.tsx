@@ -13,6 +13,7 @@ type Props = {
   dragX: number
   dragging: boolean
   showSwipeHint: boolean
+  isFavorite: boolean
   onSwipeStart: (clientX: number) => void
   onSwipeMove: (clientX: number) => void
   onSwipeEnd: () => void
@@ -24,15 +25,20 @@ type Props = {
 
 export function SingleResultScreen({
   currentRestaurant, currentResultIdx, totalResults, approximate,
-  swipeDir, dragX, dragging, showSwipeHint,
+  swipeDir, dragX, dragging, showSwipeHint, isFavorite,
   onSwipeStart, onSwipeMove, onSwipeEnd,
   handleAccept, handleReject, setScreen, dark,
 }: Props) {
   return (
     <div style={dark} className="fade-in">
       <Wordmark back onBack={() => setScreen("location")} />
-      <div style={{ textAlign: "center", marginBottom: 8 }}>
+      <div style={{ textAlign: "center", marginBottom: 8, display: "flex", justifyContent: "center", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 12, color: "#888" }}>{currentResultIdx + 1} of {totalResults}</span>
+        {isFavorite && (
+          <span style={{ fontSize: 10, color: "#FF5C35", background: "rgba(255,92,53,0.15)", padding: "2px 8px", borderRadius: 8 }}>
+            Saved
+          </span>
+        )}
       </div>
 
       {/* Restaurant Card */}

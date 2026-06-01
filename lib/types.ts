@@ -43,3 +43,4 @@ export type Screen =
   | "roulette"
   | "drop"
   | "group-join"
+  | "favorites"
