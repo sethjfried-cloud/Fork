@@ -64,12 +64,19 @@ fork-app/
 │       ├── GroupVotingScreen.tsx  # Consensus voting
 │       ├── GroupResultScreen.tsx  # Unanimous pick result
 │       ├── RouletteScreen.tsx    # Monthly spin-to-win
+│       ├── FavoritesScreen.tsx   # Saved restaurants list
 │       └── DropScreen.tsx        # Time-limited promo
 ├── lib/
 │   ├── types.ts                   # Restaurant, GroupSession, Participant, Screen
 │   ├── constants.ts               # VIBE_CARDS, delivery apps, slot items
 │   ├── utils.ts                   # shuffleArray, getDeviceId, geocodeLocation
-│   ├── preferenceMapper.ts        # DEAD CODE — unused, can delete
+│   ├── hooks/
+│   │   ├── useGeolocation.ts      # GPS detection, coords, city input
+│   │   ├── useFavorites.ts        # localStorage-backed saved restaurants
+│   │   ├── useForkDrop.ts         # Active drop fetching, claims, countdown
+│   │   ├── useRoulette.ts         # Spin state, eligibility, prizes
+│   │   ├── useSwipe.ts            # Drag state, direction, hint dismissal
+│   │   └── useGroupSession.ts     # Group mode state + Supabase realtime
 │   └── supabase/
 │       ├── client.ts              # Browser Supabase client
 │       └── server.ts              # Server Supabase client
@@ -84,13 +91,13 @@ fork-app/
 
 `page.tsx` is `"use client"` — all UI runs in the browser. The only server component is `/api/restaurants/route.ts` which proxies Yelp API calls (keeps the API key server-side).
 
-### State lives in page.tsx
+### State lives in hooks + page.tsx
 
-All state is managed via `useState` in the `Home` component. Screen components receive state + callbacks as props. No context providers, no state library.
+Domain state is owned by custom hooks in `lib/hooks/`. `page.tsx` orchestrates hooks and passes their state/callbacks to screen components as props. No context providers, no state library.
 
 ### Screen routing
 
-The `screen` state variable controls which screen renders. Values: `location`, `quiz`, `drinks-flow`, `loading`, `single-result`, `no-more`, `results`, `group-setup`, `group-lobby`, `group-voting`, `group-result`, `roulette`, `drop`, `group-join`.
+The `screen` state variable controls which screen renders. Values: `location`, `quiz`, `drinks-flow`, `loading`, `single-result`, `no-more`, `results`, `group-setup`, `group-lobby`, `group-voting`, `group-result`, `roulette`, `drop`, `group-join`, `favorites`.
 
 ### No authentication
 
