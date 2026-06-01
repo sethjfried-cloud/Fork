@@ -1,6 +1,6 @@
 export const VIBE_CARDS = [
   {
-    q: "What vibe?",
+    q: "What's the mood?",
     key: "energy",
     options: [
       { label: "Loud & lively", value: "lively", categories: "bars,gastropubs,korean,mexican" },
@@ -11,7 +11,7 @@ export const VIBE_CARDS = [
     ],
   },
   {
-    q: "Solo or group?",
+    q: "Who's coming?",
     key: "party",
     options: [
       { label: "Just me", value: "solo", categories: "cafes,ramen,sushi,sandwiches" },
@@ -19,6 +19,29 @@ export const VIBE_CARDS = [
     ],
   },
 ]
+
+// One-tap mood presets — richer than the quiz, faster than building filters.
+// Each mood maps to Yelp categories + optional price filter.
+export const MOOD_PRESETS = [
+  { label: "Date night", value: "date", icon: "🕯️", categories: "italian,french,japanese,tapas,wine_bars,cocktailbars", price: "2,3,4" },
+  { label: "Hangover cure", value: "hangover", icon: "🥴", categories: "diners,breakfast_brunch,burgers,ramen,pizza,sandwiches", price: "1,2" },
+  { label: "Impressing someone", value: "impress", icon: "✨", categories: "steak,seafood,french,finedining,japanese,newamerican", price: "3,4" },
+  { label: "Cheap & fast", value: "cheap", icon: "⚡", categories: "fastfood,pizza,sandwiches,chinese,mexican,falafel", price: "1,2" },
+  { label: "Outdoor vibes", value: "outdoor", icon: "☀️", categories: "cafes,mediterranean,mexican,gastropubs,seafood,newamerican", price: "1,2,3" },
+  { label: "Comfort food", value: "comfort", icon: "🛋️", categories: "burgers,pizza,bbq,southern,soulfood,diners,mac_and_cheese", price: "1,2,3" },
+  { label: "Something new", value: "adventurous", icon: "🌍", categories: "ethiopian,thai,indian,korean,vietnamese,turkish,peruvian", price: "1,2,3" },
+  { label: "Healthy-ish", value: "healthy", icon: "🥗", categories: "salad,acaibowls,juicebars,poke,mediterranean,vegan", price: "1,2,3" },
+] as const
+
+// Dietary filters — toggleable, persisted in localStorage.
+// Each maps to a Yelp category modifier or attribute.
+export const DIETARY_FILTERS = [
+  { label: "Vegetarian", value: "vegetarian", yelpTerm: "vegetarian" },
+  { label: "Vegan", value: "vegan", yelpTerm: "vegan" },
+  { label: "Gluten-free", value: "gluten_free", yelpTerm: "gluten_free" },
+  { label: "Halal", value: "halal", yelpTerm: "halal" },
+  { label: "Kosher", value: "kosher", yelpTerm: "kosher" },
+] as const
 
 export const DRINKS_OPTIONS = [
   { label: "Alcohol", value: "alcohol", emoji: "🍺", categories: "bars,wine_bars,cocktailbars,pubs,breweries,beer_bar" },

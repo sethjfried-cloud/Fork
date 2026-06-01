@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Restaurant, Screen } from "@/lib/types"
-import { VIBE_CARDS, DRINKS_OPTIONS } from "@/lib/constants"
+import { VIBE_CARDS, DRINKS_OPTIONS, MOOD_PRESETS } from "@/lib/constants"
 import { shuffleArray, getDeviceId, geocodeLocation } from "@/lib/utils"
 
 // Hooks
@@ -13,6 +13,7 @@ import { useForkDrop } from "@/lib/hooks/useForkDrop"
 import { useRoulette } from "@/lib/hooks/useRoulette"
 import { useSwipe } from "@/lib/hooks/useSwipe"
 import { useGroupSession } from "@/lib/hooks/useGroupSession"
+import { useDietaryFilters } from "@/lib/hooks/useDietaryFilters"
 
 // Components
 import { OrderModal } from "@/components/OrderModal"
@@ -72,6 +73,7 @@ export default function Home() {
   const { coords, setCoords, cityIn, setCityIn } = useGeolocation()
   const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites()
   const { activeDrop, dropClaimed, dropTimeLeft, claimDrop } = useForkDrop(getSupabase)
+  const dietary = useDietaryFilters()
 
   function getEffectiveLocation(): string {
     const manualInput = cityIn.trim()
@@ -120,12 +122,13 @@ export default function Home() {
 
   // ── Restaurant fetching ──
 
-  async function fetchWithParams(params: { location: string; categories: string; shuffle?: boolean }) {
+  async function fetchWithParams(params: { location: string; categories: string; shuffle?: boolean; price?: string }) {
     const loc = params.location
-    const cacheKey = `${loc.toLowerCase().trim()}|${params.categories}`
+    const dietaryKey = dietary.active.length > 0 ? `|d:${dietary.active.join(",")}` : ""
+    const cacheKey = `${loc.toLowerCase().trim()}|${params.categories}${dietaryKey}`
     const currentHour = new Date().getHours()
 
-    // Use cached results if same location+categories
+    // Use cached results if same location+categories+dietary
     if (resultCache.current && resultCache.current.key === cacheKey) {
       // Filter out rejected restaurants, then shuffle
       const available = resultCache.current.restaurants.filter(r => !rejectedIds.current.has(r.id))
@@ -149,10 +152,11 @@ export default function Home() {
         latitude: locationCoords?.lat,
         longitude: locationCoords?.lng,
         categories: params.categories,
-        price: "1,2,3",
+        price: params.price || "1,2,3",
         sort_by: "rating",
         limit: 20,
         hour: currentHour,
+        dietary: dietary.active.length > 0 ? dietary.active : undefined,
       }),
     })
     const data = await res.json()
@@ -193,6 +197,17 @@ export default function Home() {
     const categories = energyOption?.categories || partyOption?.categories || "restaurants"
     try {
       await fetchWithParams({ location: getEffectiveLocation(), categories, shuffle: true })
+      setTimeout(() => { setSlotSpinning(false); setScreen("single-result") }, 1500)
+    } catch (e: any) { setError(e.message); setSlotSpinning(false); setScreen("results") }
+  }
+
+  async function pickMood(moodValue: string) {
+    const mood = MOOD_PRESETS.find(m => m.value === moodValue)
+    if (!mood) return
+    const loc = getEffectiveLocation()
+    setCity(loc); setScreen("loading"); setSlotSpinning(true)
+    try {
+      await fetchWithParams({ location: loc, categories: mood.categories, price: mood.price, shuffle: true })
       setTimeout(() => { setSlotSpinning(false); setScreen("single-result") }, 1500)
     } catch (e: any) { setError(e.message); setSlotSpinning(false); setScreen("results") }
   }
@@ -305,9 +320,11 @@ export default function Home() {
           {screen === "location" && (
             <LocationScreen
               cityIn={cityIn} setCityIn={setCityIn} setCoords={setCoords}
-              justGo={justGo} startQuiz={startQuiz} setScreen={setScreen}
+              justGo={justGo} pickMood={pickMood} startQuiz={startQuiz} setScreen={setScreen}
               activeDrop={activeDrop} dropTimeLeft={dropTimeLeft}
-              favoritesCount={favorites.length} dark={dark}
+              favoritesCount={favorites.length}
+              dietaryActive={dietary.active} dietaryToggle={dietary.toggle}
+              dark={dark}
             />
           )}
 

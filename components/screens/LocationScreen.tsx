@@ -1,21 +1,25 @@
 "use client"
 
 import type { Screen } from "@/lib/types"
+import { MOOD_PRESETS, DIETARY_FILTERS } from "@/lib/constants"
 
 type Props = {
   cityIn: string
   setCityIn: (v: string) => void
   setCoords: (v: { lat: number; lng: number }) => void
   justGo: (city?: string) => void
+  pickMood: (mood: string) => void
   startQuiz: () => void
   setScreen: (s: Screen) => void
   activeDrop: { restaurant_name: string } | null
   dropTimeLeft: string
   favoritesCount: number
+  dietaryActive: string[]
+  dietaryToggle: (value: string) => void
   dark: React.CSSProperties
 }
 
-export function LocationScreen({ cityIn, setCityIn, setCoords, justGo, startQuiz, setScreen, activeDrop, dropTimeLeft, favoritesCount, dark }: Props) {
+export function LocationScreen({ cityIn, setCityIn, setCoords, justGo, pickMood, startQuiz, setScreen, activeDrop, dropTimeLeft, favoritesCount, dietaryActive, dietaryToggle, dark }: Props) {
   return (
     <div style={{ ...dark, display: "flex", flexDirection: "column" }}>
       {/* Wordmark + Favorites */}
@@ -57,6 +61,25 @@ export function LocationScreen({ cityIn, setCityIn, setCoords, justGo, startQuiz
         <p style={{ fontSize: 15, color: "#666", lineHeight: 1.5 }}>
           We pick one spot. You decide if you&apos;re in.
         </p>
+      </div>
+
+      {/* Dietary Filters */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+        {DIETARY_FILTERS.map(f => {
+          const on = dietaryActive.includes(f.value)
+          return (
+            <button key={f.value} onClick={() => dietaryToggle(f.value)}
+              style={{
+                background: on ? "rgba(255,92,53,0.15)" : "#141414",
+                border: on ? "1px solid #FF5C35" : "1px solid #222",
+                borderRadius: 20, padding: "6px 14px", cursor: "pointer",
+                fontSize: 12, color: on ? "#FF5C35" : "#666",
+                fontFamily: "inherit", transition: "all .15s",
+              }}>
+              {f.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Location Section */}
@@ -135,6 +158,27 @@ export function LocationScreen({ cityIn, setCityIn, setCoords, justGo, startQuiz
         Pick for me
       </button>
 
+      {/* Mood Presets */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {MOOD_PRESETS.map(mood => (
+            <button key={mood.value} onClick={() => pickMood(mood.value)}
+              style={{
+                background: "#141414", border: "1px solid #222",
+                borderRadius: 12, padding: "10px 14px", cursor: "pointer",
+                fontSize: 13, color: "#ccc", fontFamily: "inherit",
+                display: "flex", alignItems: "center", gap: 6,
+                transition: "border-color .15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = "#444")}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = "#222")}>
+              <span style={{ fontSize: 16 }}>{mood.icon}</span>
+              {mood.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Secondary Options */}
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <button
@@ -151,7 +195,7 @@ export function LocationScreen({ cityIn, setCityIn, setCoords, justGo, startQuiz
             color: "#888",
             fontFamily: "inherit",
           }}>
-          I have a vibe
+          Custom vibe
         </button>
         <button
           onClick={() => setScreen("group-setup")}

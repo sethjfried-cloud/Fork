@@ -79,7 +79,7 @@ function getCacheKey(location: string, latitude: number | undefined, longitude: 
 }
 
 export async function POST(req: NextRequest) {
-  const { location, latitude, longitude, categories, price, sort_by, neighborhood, limit: requestedLimit, hour } = await req.json()
+  const { location, latitude, longitude, categories, price, sort_by, neighborhood, limit: requestedLimit, hour, dietary } = await req.json()
 
   // Input sanitization
   if (location && typeof location === 'string' && location.length > 200) {
@@ -99,8 +99,16 @@ export async function POST(req: NextRequest) {
   // Time-aware category adjustment
   const timeAwareCategories = getTimeCategories(typeof hour === 'number' ? hour : undefined, categories || 'restaurants')
 
+  // Dietary filter terms — appended to categories so Yelp filters results.
+  // If dietary filters are active, they replace the base categories since
+  // Yelp's category search is OR-based and dietary terms are more specific.
+  const dietaryTerms: string[] = Array.isArray(dietary) ? dietary : []
+  const finalCategories = dietaryTerms.length > 0
+    ? dietaryTerms.join(',')
+    : timeAwareCategories
+
   // Check response cache before hitting Yelp
-  const cacheKey = getCacheKey(location, latitude, longitude, timeAwareCategories)
+  const cacheKey = getCacheKey(location, latitude, longitude, finalCategories)
   const cached = responseCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return NextResponse.json(cached.data)
@@ -113,7 +121,7 @@ export async function POST(req: NextRequest) {
   // Build params - prefer lat/long for accuracy, fallback to text location
   // 1200 meters = ~0.75 miles - tighter neighborhood radius to avoid adjacent areas
   const params = new URLSearchParams({
-    categories: timeAwareCategories,
+    categories: finalCategories,
     price: price || '1,2',
     sort_by: sort_by || 'distance',
     open_now: 'true',
