@@ -53,6 +53,10 @@ export default function Home() {
   const [slotSpinning, setSlotSpinning] = useState(false)
   const [orderModal, setOrderModal] = useState<Restaurant | null>(null)
 
+  // Cache: full batch from last fetch, keyed by location+categories.
+  // Re-rolls reshuffle the cache instead of re-fetching from Yelp.
+  const resultCache = useRef<{ key: string; restaurants: Restaurant[]; approximate: boolean } | null>(null)
+
   // ── Quiz state ──
   const [cardIdx, setCardIdx] = useState(0)
   const [animKey, setAnimKey] = useState(0)
@@ -112,6 +116,19 @@ export default function Home() {
 
   async function fetchWithParams(params: { location: string; categories: string; shuffle?: boolean }) {
     const loc = params.location
+    const cacheKey = `${loc.toLowerCase().trim()}|${params.categories}`
+
+    // Use cached results if same location+categories
+    if (resultCache.current && resultCache.current.key === cacheKey) {
+      const restaurants = params.shuffle
+        ? shuffleArray([...resultCache.current.restaurants])
+        : [...resultCache.current.restaurants]
+      setResults(restaurants)
+      setCurrentResultIdx(0)
+      setApproximate(resultCache.current.approximate)
+      return
+    }
+
     const locationCoords = coords || await geocodeLocation(loc, coords, cityIn)
     const res = await fetch("/api/restaurants", {
       method: "POST",
@@ -129,7 +146,11 @@ export default function Home() {
     })
     const data = await res.json()
     if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Something went wrong")
-    const restaurants = params.shuffle ? shuffleArray(data.restaurants) : data.restaurants
+
+    // Cache the full batch
+    resultCache.current = { key: cacheKey, restaurants: data.restaurants, approximate: data.approximate || false }
+
+    const restaurants = params.shuffle ? shuffleArray([...data.restaurants]) : data.restaurants
     setResults(restaurants)
     setCurrentResultIdx(0)
     setApproximate(data.approximate || false)

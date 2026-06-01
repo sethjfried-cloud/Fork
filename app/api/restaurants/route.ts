@@ -48,6 +48,18 @@ const MAX_LIMIT = 20
 // that happen to be on Yelp (ShopRite, bodegas, etc.)
 const MIN_REVIEW_COUNT = 5
 
+// In-memory response cache — prevents duplicate Yelp calls for the same query.
+// Keyed by location+categories, entries expire after 60 seconds.
+// This is per-serverless-instance so it won't prevent ALL duplicates,
+// but catches the common case of rapid re-fetches from the same user.
+const responseCache = new Map<string, { data: any; timestamp: number }>()
+const CACHE_TTL_MS = 60_000
+
+function getCacheKey(location: string, latitude: number | undefined, longitude: number | undefined, categories: string): string {
+  if (latitude && longitude) return `${latitude.toFixed(4)},${longitude.toFixed(4)}|${categories}`
+  return `${(location || '').toLowerCase().trim()}|${categories}`
+}
+
 export async function POST(req: NextRequest) {
   const { location, latitude, longitude, categories, price, sort_by, neighborhood, limit: requestedLimit } = await req.json()
 
@@ -64,6 +76,13 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.YELP_API_KEY
   if (!apiKey) {
     return NextResponse.json({ error: 'API configuration error' }, { status: 500 })
+  }
+
+  // Check response cache before hitting Yelp
+  const cacheKey = getCacheKey(location, latitude, longitude, categories || 'restaurants')
+  const cached = responseCache.get(cacheKey)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return NextResponse.json(cached.data)
   }
 
   // Cap limit at MAX_LIMIT - handle both string and number input
@@ -196,5 +215,16 @@ export async function POST(req: NextRequest) {
     ? sortedFiltered.slice(0, parseInt(limit))
     : allRestaurants.slice(0, parseInt(limit))
 
-  return NextResponse.json({ restaurants, approximate: !useFiltered })
+  const responseData = { restaurants, approximate: !useFiltered }
+
+  // Cache the response and evict stale entries
+  responseCache.set(cacheKey, { data: responseData, timestamp: Date.now() })
+  if (responseCache.size > 100) {
+    const now = Date.now()
+    for (const [key, entry] of responseCache) {
+      if (now - entry.timestamp > CACHE_TTL_MS) responseCache.delete(key)
+    }
+  }
+
+  return NextResponse.json(responseData)
 }
