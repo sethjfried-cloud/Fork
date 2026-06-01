@@ -1,29 +1,36 @@
 "use client"
 
 import { Wordmark } from "@/components/Wordmark"
-import type { Restaurant, GroupSession, Screen } from "@/lib/types"
+import type { Restaurant, GroupSession, Participant, Screen } from "@/lib/types"
 
 type Props = {
   groupSession: GroupSession
+  groupVotes: Record<string, Record<string, "yes" | "no">>
+  participants: Participant[]
   setOrderModal: (r: Restaurant | null) => void
   setGroupSession: (s: GroupSession | null) => void
   setScreen: (s: Screen) => void
   dark: React.CSSProperties
 }
 
-export function GroupResultScreen({ groupSession, setOrderModal, setGroupSession, setScreen, dark }: Props) {
+export function GroupResultScreen({ groupSession, groupVotes, participants, setOrderModal, setGroupSession, setScreen, dark }: Props) {
   const finalPick = groupSession.final_pick!
+  const pickVotes = groupVotes[finalPick.id] || {}
+  const yesCount = Object.values(pickVotes).filter(v => v === "yes").length
+  const isUnanimous = yesCount === participants.length
 
   return (
     <div style={dark} className="fade-in">
       <Wordmark />
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>{isUnanimous ? "🎉" : "🤝"}</div>
         <h1 className="fork-serif" style={{ fontSize: 26, fontWeight: 700, color: "#fff", marginBottom: 8 }}>
-          {"Everyone agreed!"}
+          {isUnanimous ? "Everyone agreed!" : "Top pick!"}
         </h1>
         <p style={{ fontSize: 14, color: "#888", marginBottom: 28 }}>
-          {"You're going to..."}
+          {isUnanimous
+            ? "You're going to..."
+            : `${yesCount} of ${participants.length} voted yes — the group favorite.`}
         </p>
 
         <div style={{ background: "#fff", borderRadius: 24, padding: "28px", marginBottom: 24 }}>

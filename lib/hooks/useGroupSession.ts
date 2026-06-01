@@ -70,17 +70,40 @@ export function useGroupSession({
             voteMap[v.restaurant_id][v.participant_id] = v.vote
           })
           setGroupVotes(voteMap)
-          // Check consensus
+          // Check consensus or fallback
           const gs = groupSession
           if (gs && participants.length > 0) {
             const restaurants = gs.restaurants || results
+            let bestFallback: { restaurant: Restaurant; yesCount: number } | null = null
+            let allVoted = true
+
             for (const restaurant of restaurants) {
               const rv = voteMap[restaurant.id] || {}
-              if (Object.values(rv).filter(v => v === "yes").length === participants.length) {
+              const yesCount = Object.values(rv).filter(v => v === "yes").length
+              const totalVotes = Object.keys(rv).length
+
+              // Unanimous — everyone said yes
+              if (yesCount === participants.length) {
                 const sb2 = await getSupabase()
                 await sb2.from("group_sessions").update({ status: "complete", final_pick: restaurant }).eq("id", sessionId)
                 return
               }
+
+              // Track whether all participants have voted on this restaurant
+              if (totalVotes < participants.length) allVoted = false
+
+              // Track the restaurant with the most yes votes for fallback
+              if (!bestFallback || yesCount > bestFallback.yesCount) {
+                bestFallback = { restaurant, yesCount }
+              }
+            }
+
+            // Fallback: everyone voted on everything but no unanimous pick.
+            // Pick the restaurant with the most yes votes.
+            if (allVoted && bestFallback) {
+              const sb2 = await getSupabase()
+              await sb2.from("group_sessions").update({ status: "complete", final_pick: bestFallback.restaurant }).eq("id", sessionId)
+              return
             }
           }
         }

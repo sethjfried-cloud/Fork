@@ -346,7 +346,7 @@ export default function Home() {
           )}
 
           {screen === "no-more" && (
-            <NoMoreScreen rollAgain={rollAgain} setScreen={setScreen} dark={dark} />
+            <NoMoreScreen rollAgain={rollAgain} favoritesCount={favorites.length} setScreen={setScreen} dark={dark} />
           )}
 
           {screen === "results" && (
@@ -394,7 +394,8 @@ export default function Home() {
 
           {screen === "group-result" && group.groupSession?.final_pick && (
             <GroupResultScreen
-              groupSession={group.groupSession} setOrderModal={setOrderModal}
+              groupSession={group.groupSession} groupVotes={group.groupVotes}
+              participants={group.participants} setOrderModal={setOrderModal}
               setGroupSession={group.setGroupSession} setScreen={setScreen} dark={dark}
             />
           )}
