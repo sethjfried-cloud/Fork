@@ -7,36 +7,30 @@
 
 ## Last Updated
 
-2026-06-01 (Seth + Claude) — **Hooks extraction + saved favorites complete. Build passes clean.**
+2026-06-01 (Seth + Claude) — **Result caching, rate limiting, group vote fallback, and no-more favorites prompt shipped.**
 
 ---
 
-## What Just Happened
+## What Just Happened (Session 1)
 
-### Session 1: Monolith Decomposition (COMPLETE)
+### Monolith Decomposition
+Broke up the 2,312-line `page.tsx` monolith into 20+ files. `page.tsx` is now ~310 lines — hooks + screen routing only.
 
-Broke up the 2,312-line `page.tsx` monolith into 20 files: 3 shared libs, 3 shared components, 13 screen components. `page.tsx` went from 2,312 to 778 lines.
+### Hooks Extraction + Favorites
+Extracted state into 6 custom hooks (`useGeolocation`, `useFavorites`, `useForkDrop`, `useRoulette`, `useSwipe`, `useGroupSession`). Added saved favorites feature with localStorage persistence, heart icon on home screen, swipe-right auto-save.
 
-### Session 1 (continued): Hooks Extraction + Favorites (COMPLETE)
+### Result Caching + Rate Limiting
+- Client-side: full Yelp batch cached by location+categories. Re-rolls reshuffle cache instead of re-fetching.
+- Server-side: in-memory response cache on `/api/restaurants` with 60s TTL.
 
-Extracted state from `page.tsx` into 6 custom hooks:
+### Group Vote Fallback
+When all restaurants are voted on with no unanimous pick, auto-selects the one with the most yes votes. Result screen distinguishes unanimous vs fallback.
 
-- `lib/hooks/useGeolocation.ts` — GPS detection, coords, cityIn
-- `lib/hooks/useFavorites.ts` — localStorage-backed save/remove/check
-- `lib/hooks/useForkDrop.ts` — active drop fetching, claims, countdown
-- `lib/hooks/useRoulette.ts` — spin state, eligibility, prizes
-- `lib/hooks/useSwipe.ts` — drag state, direction, hint dismissal
-- `lib/hooks/useGroupSession.ts` — all group mode state + Supabase realtime
+### NoMoreScreen Favorites Prompt
+When user has saved spots, "Check saved spots" becomes primary CTA. Copy adapts contextually.
 
-Added **saved favorites** feature:
-- Swipe right auto-saves restaurant to favorites
-- Heart icon with count badge on home screen
-- New `FavoritesScreen` with order/remove actions
-- Persisted in localStorage (`fork_favorites`)
-
-Deleted dead `lib/preferenceMapper.ts`.
-
-`page.tsx` is now ~310 lines — hooks + screen routing only.
+### Bug Fix: group-join Screen
+Added missing render block — users joining via `?join=CODE` URL param now see the group setup screen with code pre-filled.
 
 ---
 
@@ -48,13 +42,15 @@ Deleted dead `lib/preferenceMapper.ts`.
 - Tinder-style card swiping (touch + mouse)
 - Delivery modal (Uber Eats, DoorDash, Grubhub, Postmates, Seamless)
 - Reservation modal (OpenTable, Resy, Yelp)
-- Group voting via Supabase Realtime (create/join/vote/consensus)
+- Group voting via Supabase Realtime with fallback for no-consensus
 - Fork Roulette (monthly spin-to-win)
 - Fork Drops (time-limited promotions)
 - Lottery entry tracking (device-based)
 - Component decomposition into 20+ files
 - Custom hooks extraction (6 hooks)
 - Saved favorites with localStorage persistence
+- Result caching (client + server)
+- API rate limiting (server-side, 60s TTL)
 
 ---
 
@@ -65,17 +61,15 @@ Deleted dead `lib/preferenceMapper.ts`.
 - **Prize redemption flow** — roulette just says "we'll email you"
 - **Analytics / event tracking** — no usage metrics
 - **Email notifications** — no Resend/SendGrid integration
-- **Rate limiting** — Yelp API calls unthrottled
-- **Result caching** — re-rolls re-fetch from Yelp every time
 
 ---
 
 ## Known Issues
 
-1. Group voting requires unanimous consensus — no fallback for stalled votes
-2. Group code generation uses `Math.random()` — not cryptographically secure
-3. Device ID forgeable via localStorage clear
-4. Roulette prize info is hardcoded in the UI ("Tasting Menu for Two") even though DB prizes may differ
+1. Group code generation uses `Math.random()` — not cryptographically secure
+2. Device ID forgeable via localStorage clear
+3. Roulette prize info is hardcoded in the UI ("Tasting Menu for Two") even though DB prizes may differ
+4. Server-side cache is per-instance (serverless) — not shared across cold starts
 
 ---
 
