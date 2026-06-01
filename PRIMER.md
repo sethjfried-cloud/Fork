@@ -7,30 +7,26 @@
 
 ## Last Updated
 
-2026-06-01 (Seth + Claude) — **Result caching, rate limiting, group vote fallback, and no-more favorites prompt shipped.**
+2026-06-01 (Seth + Claude) — **Smart re-roll, time-aware suggestions, enhanced cards shipped.**
 
 ---
 
-## What Just Happened (Session 1)
+## Session 1 Summary
 
-### Monolith Decomposition
-Broke up the 2,312-line `page.tsx` monolith into 20+ files. `page.tsx` is now ~310 lines — hooks + screen routing only.
+### Architecture
+- Decomposed 2,312-line `page.tsx` monolith into 20+ files
+- Extracted state into 6 custom hooks — `page.tsx` is now ~320 lines
+- All screen components in `components/screens/`, shared components in `components/`
 
-### Hooks Extraction + Favorites
-Extracted state into 6 custom hooks (`useGeolocation`, `useFavorites`, `useForkDrop`, `useRoulette`, `useSwipe`, `useGroupSession`). Added saved favorites feature with localStorage persistence, heart icon on home screen, swipe-right auto-save.
-
-### Result Caching + Rate Limiting
-- Client-side: full Yelp batch cached by location+categories. Re-rolls reshuffle cache instead of re-fetching.
-- Server-side: in-memory response cache on `/api/restaurants` with 60s TTL.
-
-### Group Vote Fallback
-When all restaurants are voted on with no unanimous pick, auto-selects the one with the most yes votes. Result screen distinguishes unanimous vs fallback.
-
-### NoMoreScreen Favorites Prompt
-When user has saved spots, "Check saved spots" becomes primary CTA. Copy adapts contextually.
-
-### Bug Fix: group-join Screen
-Added missing render block — users joining via `?join=CODE` URL param now see the group setup screen with code pre-filled.
+### Features Built
+- **Saved favorites** — swipe right auto-saves, localStorage persistence, heart icon + badge, FavoritesScreen with order/remove
+- **Result caching** — client-side cache by location+categories, server-side 60s TTL on API route
+- **Smart re-roll** — rejected restaurants excluded from reshuffles, never see a "nope" twice
+- **Time-aware suggestions** — API adjusts categories by hour (breakfast/brunch/happy hour/late night)
+- **Enhanced cards** — service tags (Delivery, Pickup, Reservations) + phone number on restaurant cards
+- **Group vote fallback** — when no unanimous pick, auto-selects most-voted restaurant
+- **NoMoreScreen favorites prompt** — "Check saved spots" CTA when user has favorites
+- **group-join screen** — fixed blank screen when joining via URL param
 
 ---
 
@@ -39,18 +35,17 @@ Added missing render block — users joining via `?join=CODE` URL param now see 
 - Location input with GPS auto-detect (Nominatim reverse geocoding)
 - 2-question vibe quiz + drinks sub-flow
 - Yelp API integration with NYC neighborhood strict filtering
-- Tinder-style card swiping (touch + mouse)
+- Tinder-style card swiping (touch + mouse) with smart rejection tracking
 - Delivery modal (Uber Eats, DoorDash, Grubhub, Postmates, Seamless)
 - Reservation modal (OpenTable, Resy, Yelp)
 - Group voting via Supabase Realtime with fallback for no-consensus
 - Fork Roulette (monthly spin-to-win)
 - Fork Drops (time-limited promotions)
 - Lottery entry tracking (device-based)
-- Component decomposition into 20+ files
-- Custom hooks extraction (6 hooks)
 - Saved favorites with localStorage persistence
-- Result caching (client + server)
-- API rate limiting (server-side, 60s TTL)
+- Result caching (client + server) + API rate limiting
+- Time-aware category suggestions
+- Enhanced restaurant cards with service tags + phone
 
 ---
 
