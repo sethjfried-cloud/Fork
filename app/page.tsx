@@ -57,6 +57,10 @@ export default function Home() {
   // Re-rolls reshuffle the cache instead of re-fetching from Yelp.
   const resultCache = useRef<{ key: string; restaurants: Restaurant[]; approximate: boolean } | null>(null)
 
+  // Smart re-roll: track rejected restaurant IDs so they never reappear.
+  // Cleared when location or categories change (new fetch).
+  const rejectedIds = useRef<Set<string>>(new Set())
+
   // ── Quiz state ──
   const [cardIdx, setCardIdx] = useState(0)
   const [animKey, setAnimKey] = useState(0)
@@ -88,6 +92,8 @@ export default function Home() {
       }
     },
     onReject: () => {
+      const r = results[currentResultIdx]
+      if (r) rejectedIds.current.add(r.id)
       if (currentResultIdx < results.length - 1) setCurrentResultIdx(i => i + 1)
       else setScreen("no-more")
     },
@@ -117,17 +123,21 @@ export default function Home() {
   async function fetchWithParams(params: { location: string; categories: string; shuffle?: boolean }) {
     const loc = params.location
     const cacheKey = `${loc.toLowerCase().trim()}|${params.categories}`
+    const currentHour = new Date().getHours()
 
     // Use cached results if same location+categories
     if (resultCache.current && resultCache.current.key === cacheKey) {
-      const restaurants = params.shuffle
-        ? shuffleArray([...resultCache.current.restaurants])
-        : [...resultCache.current.restaurants]
+      // Filter out rejected restaurants, then shuffle
+      const available = resultCache.current.restaurants.filter(r => !rejectedIds.current.has(r.id))
+      const restaurants = params.shuffle ? shuffleArray([...available]) : available
       setResults(restaurants)
       setCurrentResultIdx(0)
       setApproximate(resultCache.current.approximate)
       return
     }
+
+    // New fetch — clear rejected IDs
+    rejectedIds.current.clear()
 
     const locationCoords = coords || await geocodeLocation(loc, coords, cityIn)
     const res = await fetch("/api/restaurants", {
@@ -142,6 +152,7 @@ export default function Home() {
         price: "1,2,3",
         sort_by: "rating",
         limit: 20,
+        hour: currentHour,
       }),
     })
     const data = await res.json()

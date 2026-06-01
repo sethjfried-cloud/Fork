@@ -43,6 +43,24 @@ const BLOCKED_CATEGORY_ALIASES = new Set([
   'hotels', 'hotelstravel',
 ])
 
+// Time-aware category suggestions based on hour of day (UTC offset handled client-side).
+// Client sends optional `hour` param; if present, we blend time-appropriate categories.
+function getTimeCategories(hour: number | undefined, baseCategories: string): string {
+  if (hour == null) return baseCategories
+  // Early morning (5-10): breakfast/brunch/coffee
+  if (hour >= 5 && hour < 10) return baseCategories === 'restaurants' ? 'breakfast_brunch,cafes,coffee' : baseCategories
+  // Brunch window (10-13): brunch-heavy
+  if (hour >= 10 && hour < 13) return baseCategories === 'restaurants' ? 'breakfast_brunch,restaurants' : baseCategories
+  // Lunch (13-16): default restaurants is fine
+  if (hour >= 13 && hour < 16) return baseCategories
+  // Happy hour (16-18): bars + restaurants
+  if (hour >= 16 && hour < 18) return baseCategories === 'restaurants' ? 'restaurants,bars' : baseCategories
+  // Dinner (18-22): default restaurants is fine
+  if (hour >= 18 && hour < 22) return baseCategories
+  // Late night (22-5): bars, late night food
+  return baseCategories === 'restaurants' ? 'bars,restaurants' : baseCategories
+}
+
 const MAX_LIMIT = 20
 // Minimum reviews to appear — filters out closed/inactive listings and non-restaurants
 // that happen to be on Yelp (ShopRite, bodegas, etc.)
@@ -61,7 +79,7 @@ function getCacheKey(location: string, latitude: number | undefined, longitude: 
 }
 
 export async function POST(req: NextRequest) {
-  const { location, latitude, longitude, categories, price, sort_by, neighborhood, limit: requestedLimit } = await req.json()
+  const { location, latitude, longitude, categories, price, sort_by, neighborhood, limit: requestedLimit, hour } = await req.json()
 
   // Input sanitization
   if (location && typeof location === 'string' && location.length > 200) {
@@ -78,8 +96,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'API configuration error' }, { status: 500 })
   }
 
+  // Time-aware category adjustment
+  const timeAwareCategories = getTimeCategories(typeof hour === 'number' ? hour : undefined, categories || 'restaurants')
+
   // Check response cache before hitting Yelp
-  const cacheKey = getCacheKey(location, latitude, longitude, categories || 'restaurants')
+  const cacheKey = getCacheKey(location, latitude, longitude, timeAwareCategories)
   const cached = responseCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return NextResponse.json(cached.data)
@@ -92,7 +113,7 @@ export async function POST(req: NextRequest) {
   // Build params - prefer lat/long for accuracy, fallback to text location
   // 1200 meters = ~0.75 miles - tighter neighborhood radius to avoid adjacent areas
   const params = new URLSearchParams({
-    categories: categories || 'restaurants',
+    categories: timeAwareCategories,
     price: price || '1,2',
     sort_by: sort_by || 'distance',
     open_now: 'true',
@@ -179,6 +200,9 @@ export async function POST(req: NextRequest) {
       url: b.url,
       // Distance in miles (Yelp returns meters)
       distance: b.distance ? Math.round(b.distance * 0.000621371 * 10) / 10 : null,
+      phone: b.display_phone || null,
+      isClosed: b.is_closed ?? false,
+      transactions: b.transactions ?? [],
     }))
 
   // STRICT filtering: must match neighborhood AND must NOT be in excluded areas

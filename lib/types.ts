@@ -9,6 +9,9 @@ export type Restaurant = {
   address: string
   url: string
   distance?: number | null
+  phone?: string | null
+  isClosed?: boolean
+  transactions?: string[]  // "delivery", "pickup", "restaurant_reservation"
 }
 
 export type GroupSession = {

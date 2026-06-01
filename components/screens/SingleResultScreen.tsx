@@ -144,9 +144,34 @@ export function SingleResultScreen({
             <span style={{ fontSize: 14, fontWeight: 600, color: "#F4A261" }}>★ {currentRestaurant.rating}</span>
             <span style={{ fontSize: 13, color: "#888" }}>({currentRestaurant.reviewCount})</span>
           </div>
-          <p style={{ fontSize: 13, color: "#888" }}>
+          <p style={{ fontSize: 13, color: "#888", marginBottom: currentRestaurant.transactions?.length || currentRestaurant.phone ? 12 : 0 }}>
             {currentRestaurant.address}
           </p>
+          {/* Service tags */}
+          {(currentRestaurant.transactions?.length || currentRestaurant.phone) ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {currentRestaurant.transactions?.includes("delivery") && (
+                <span style={{ fontSize: 10, color: "#1D9E75", background: "rgba(29,158,117,0.12)", padding: "3px 8px", borderRadius: 8 }}>
+                  Delivery
+                </span>
+              )}
+              {currentRestaurant.transactions?.includes("pickup") && (
+                <span style={{ fontSize: 10, color: "#1D9E75", background: "rgba(29,158,117,0.12)", padding: "3px 8px", borderRadius: 8 }}>
+                  Pickup
+                </span>
+              )}
+              {currentRestaurant.transactions?.includes("restaurant_reservation") && (
+                <span style={{ fontSize: 10, color: "#7F77DD", background: "rgba(127,119,221,0.12)", padding: "3px 8px", borderRadius: 8 }}>
+                  Reservations
+                </span>
+              )}
+              {currentRestaurant.phone && (
+                <span style={{ fontSize: 10, color: "#666", background: "rgba(255,255,255,0.06)", padding: "3px 8px", borderRadius: 8 }}>
+                  {currentRestaurant.phone}
+                </span>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 
